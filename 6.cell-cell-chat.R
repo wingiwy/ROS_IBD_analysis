@@ -1,150 +1,206 @@
 #1. library ----
-library(CellChat)
-library(Seurat)
-library(patchwork)
-library(dplyr)
-library(ComplexHeatmap)
-#2. load data ------
-plan("multisession", workers = 4)
-load("../all.cell.annotation.counts.Rdata")
-table(sce.all.1$new_celltype)
-celltypes_to_plot <- c(
-  'EECs_Lix1',
-  'Entero_Sult1a1','Entero_Duoxa2_s100a9','Goblet_Best2',
-  'pDCs','cDC2_Zeb2','cDC1',
-  'Macs_Mrc1_Cd163','Macs_Itgax','Macs_Spp1','Ly6c_Monocytes',
-  'Neu_Csf1','Neu_Retnlg',
-  'Cd8_Gzmm','Cd4_Cd8','Cd4_treg',
-  'IgG_plasma_B','Memory_B','Plasmablast',
-  'Endothelial','Lymphatics','Fibro_IL11_Cxcl14','Fibro_Smoc2_Ccl11',
-  'Fibro_Mfap5_Gsn','Myofibroblasts','Cycling_stroma'
-)
 
-sce_CD <- sce.all.1[, sce.all.1$group %in% c( 'CD' )]
-sce_CD <- sce_CD[, sce_CD$new_celltype %in% celltypes_to_plot]
+#devtools::install_github("saeyslab/nichenetr")
+#options(timeout=600000000)
+#devtools::install_github("saeyslab/multinichenetr")
 
-
-data.input <- sce_CD[["RNA"]]$data
-meta <- sce_CD@meta.data[,c("group","new_celltype")]
-colnames(meta) <- c("group","celltypes")
-table(meta$celltypes)
-meta$celltypes = droplevels(meta$celltypes, 
-                            exclude = setdiff(levels(meta$celltypes),unique(meta$celltypes)))
-
-cellchat <- createCellChat(object = data.input, 
-                           meta = meta, 
-                           group.by = "celltypes")
-levels(cellchat@idents)
-
-
-CellChatDB <- CellChatDB.mouse
-dplyr::glimpse(CellChatDB$interaction)
-cellchat@DB <- CellChatDB
-table(CellChatDB.mouse$interaction$annotation)
-
-#3. cellchat2 analysis------
-cellchat <- subsetData(cellchat)  
-cellchat <- identifyOverExpressedGenes(cellchat)  
-cellchat <- identifyOverExpressedInteractions(cellchat)  
-
-cellchat <- computeCommunProb(cellchat,type="triMean") 
-
-cellchat <- filterCommunication(cellchat, min.cells = 5)  
-
-cellchat <- computeCommunProbPathway(cellchat)  
-cellchat <- aggregateNet(cellchat)             
-df.net <- subsetCommunication(cellchat)     
-
-groupSize <- as.numeric(table(cellchat@idents))
-par(mfrow = c(1,2), xpd=TRUE)
-netVisual_circle(cellchat@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
-netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
-
-mat <- cellchat@net$weight
-par(mfrow = c(4,5), xpd=TRUE)
-for (i in 1:nrow(mat)) {
-  mat2 <- matrix(0, nrow = nrow(mat), ncol = ncol(mat), dimnames = dimnames(mat))
-  mat2[i, ] <- mat[i, ]
-  netVisual_circle(mat2, vertex.weight = groupSize, weight.scale = T, edge.weight.max = max(mat), title.name = rownames(mat)[i])
-}
-
-sce_PB <- sce.all.1[, sce.all.1$group %in% c( 'PB_IFX' )]
-sce_PB <- sce_PB[, sce_PB$new_celltype %in% celltypes_to_plot]
-data.input <- sce_PB[["RNA"]]$data
-meta <- sce_PB@meta.data[,c("group","new_celltype")]
-colnames(meta) <- c("group","celltypes")
-table(meta$celltypes)
-meta$celltypes = droplevels(meta$celltypes, 
-                            exclude = setdiff(levels(meta$celltypes),unique(meta$celltypes)))
-
-cellchat <- createCellChat(object = data.input, 
-                           meta = meta, 
-                           group.by = "celltypes")
-levels(cellchat@idents)
-
-CellChatDB <- CellChatDB.mouse
-dplyr::glimpse(CellChatDB$interaction)
-cellchat@DB <- CellChatDB
-table(CellChatDB.mouse$interaction$annotation)
-
-cellchat <- subsetData(cellchat)  
-cellchat <- identifyOverExpressedGenes(cellchat)  
-cellchat <- identifyOverExpressedInteractions(cellchat)  
-
-cellchat <- computeCommunProb(cellchat,type="triMean") 
-cellchat <- filterCommunication(cellchat, min.cells = 5)  
-
-cellchat <- computeCommunProbPathway(cellchat)  
-cellchat <- aggregateNet(cellchat)             
-df.net <- subsetCommunication(cellchat)     
-
-
-CDcellchat <-  readRDS("CD.cellchat.rds")
-PBcellchat <- readRDS("PB.cellchat.rds")
-
-object.list <- list(CD = CDcellchat,PB = PBcellchat )
-cellchat <- mergeCellChat(object.list, add.names = names(object.list), cell.prefix = TRUE)
-
-
-
-a<- df.net$CD  #查看CD组的pathway
-b<- df.net$PB  #查看PB组的pathway
-
-gg1 <- compareInteractions(cellchat, show.legend = F, group = c(1,2), measure = "count")
-gg2 <- compareInteractions(cellchat, show.legend = F, group = c(1,2), measure = "weight")
-p <- gg1 + gg2
-p
-
-par(mfrow = c(1,2), xpd=TRUE)
-netVisual_diffInteraction(cellchat, weight.scale = T)
-netVisual_diffInteraction(cellchat, weight.scale = T, measure = "weight")
-
-gg1 <- netVisual_heatmap(cellchat)
-gg2 <- netVisual_heatmap(cellchat, measure = "weight")
-gg1 + gg2
-
-
-
-
-
-
+#加载包
 library(SingleCellExperiment)
 library(dplyr)
 library(ggplot2)
 library(nichenetr)
 library(multinichenetr)
 library(Seurat)
-library(dplyr)
-library(ggplot2)
-library(circlize)
-library(grDevices)
-library(cowplot)
 
-setwd("/Users/wangying/work/project/Rat_CD_model/single_cell_sequencing/res_1/cell-cell/")
+organism = "mouse"
+options(timeout = 120)
 
-data = read.csv("group_prioritization.csv",row.names = 1)
+#lr_network_all = readRDS(url("https://zenodo.org/record/10229222/files/lr_network_mouse_allInfo_30112033.rds" )) 
 
-df = data[,c(8,3,4,5,6,2,17)]
+#lr
+lr_network_all = readRDS("/Users/wangying/Downloads/lr_network_mouse_allInfo_30112033.rds") %>% 
+  mutate(
+    ligand = convert_alias_to_symbols(ligand, organism = "mouse"), 
+    receptor = convert_alias_to_symbols(receptor, organism = "mouse"))
+
+lr_network_all = lr_network_all  %>% 
+  mutate(ligand = make.names(ligand), receptor = make.names(receptor))
+lr_network = lr_network_all %>% 
+  distinct(ligand, receptor) 
+
+#weight matrix
+ligand_target_matrix = readRDS("/Users/wangying/Downloads/ligand_target_matrix_nsga2r_final_mouse.rds")
+
+colnames(ligand_target_matrix) = colnames(ligand_target_matrix) %>% 
+  convert_alias_to_symbols(organism = organism) %>% make.names()
+rownames(ligand_target_matrix) = rownames(ligand_target_matrix) %>% 
+  convert_alias_to_symbols(organism = organism) %>% make.names()
+
+lr_network = lr_network %>% filter(ligand %in% colnames(ligand_target_matrix))
+ligand_target_matrix = ligand_target_matrix[, lr_network$ligand %>% unique()] 
+
+
+load('all.cell.annotation.counts.Rdata')
+
+sce.1 = sce.all.1[, sce.all.1$group %in% c('CD',"PB_IFX")]
+sce = Seurat::as.SingleCellExperiment(sce.1, assay = "RNA")
+sce = alias_to_symbol_SCE(sce, "mouse") %>% makenames_SCE()
+
+
+sample_id = "group"
+group_id = "group"
+celltype_id = "new_celltype"
+
+covariates = NA 
+batches = NA 
+
+table(sce$orig.ident, sce$group)
+
+#SummarizedExperiment::colData(sce)$sample_id = SummarizedExperiment::colData(sce)$group %>% make.names()
+SummarizedExperiment::colData(sce)$group = SummarizedExperiment::colData(sce)$group %>% make.names()
+SummarizedExperiment::colData(sce)$new_celltype = SummarizedExperiment::colData(sce)$new_celltype %>% make.names()
+
+contrasts_oi = c("'CD-PB_IFX','PB_IFX-CD'")
+contrast_tbl = tibble(contrast = c("CD-PB_IFX","PB_IFX-CD"),group = c("CD","PB_IFX"))
+
+conditions_keep = c("CD", "PB_IFX")
+sce = sce[, SummarizedExperiment::colData(sce)[,group_id] %in% 
+            conditions_keep]
+
+senders_oi = SummarizedExperiment::colData(sce)[,celltype_id] %>% unique()
+receivers_oi = SummarizedExperiment::colData(sce)[,celltype_id] %>% unique()
+sce = sce[, SummarizedExperiment::colData(sce)[,group_id] %in%  conditions_keep]
+
+#parameters
+min_cells = 2               
+min_sample_prop = 1         
+fraction_cutoff = 0.01    
+empirical_pval = FALSE      
+
+logFC_threshold = 0.3       
+p_val_threshold = 0.05
+p_val_adj = TRUE            
+
+top_n_target = 250          
+scenario = "regular"
+ligand_activity_down = FALSE
+
+abundance_info = get_abundance_info(sce = sce,       
+                                    sample_id = sample_id,     
+                                    group_id = group_id,             
+                                    celltype_id = celltype_id,          
+                                    min_cells = min_cells,              
+                                    senders_oi = senders_oi,              
+                                    receivers_oi = receivers_oi,         
+                                    batches = batches)
+
+min_sample_prop = 1
+fraction_cutoff = 0.05
+frq_list = get_frac_exprs_sampleAgnostic(sce = sce,    
+                                         sample_id = sample_id, 
+                                         celltype_id = celltype_id,   
+                                         group_id = group_id,              
+                                         batches = batches,                 
+                                         min_cells = min_cells,             
+                                         fraction_cutoff = fraction_cutoff, 
+                                         min_sample_prop = min_sample_prop)
+#Now only keep genes that are expressed by at least one cell type:
+genes_oi = frq_list$expressed_df %>% filter(expressed == TRUE) %>% pull(gene) %>% unique() 
+sce = sce[genes_oi, ]
+
+abundance_expression_info = process_abundance_expression_info(  
+  sce = sce, 
+  sample_id = group_id,
+  group_id = group_id, 
+  celltype_id = celltype_id, 
+  min_cells = min_cells, 
+  senders_oi = senders_oi, 
+  receivers_oi = receivers_oi,  
+  lr_network = lr_network, 
+  batches = batches,  
+  frq_list = frq_list, 
+  abundance_info = abundance_info)
+
+
+DE_info = get_DE_info_sampleAgnostic(  sce = sce, 
+                                       group_id = group_id, 
+                                       celltype_id = celltype_id,  
+                                       contrasts_oi = contrasts_oi,  
+                                       expressed_df = frq_list$expressed_df,   
+                                       min_cells = min_cells,  
+                                       contrast_tbl = contrast_tbl)
+
+celltype_de = DE_info$celltype_de_findmarkers
+
+sender_receiver_de = multinichenetr::combine_sender_receiver_de(  
+  sender_de = celltype_de,  
+  receiver_de = celltype_de, 
+  senders_oi = senders_oi,  
+  receivers_oi = receivers_oi, 
+  lr_network = lr_network)
+
+
+logFC_threshold = 0.3 # lower here for FindMarkers than for Pseudobulk-EdgeR
+p_val_threshold = 0.05
+p_val_adj = TRUE 
+geneset_assessment = contrast_tbl$contrast %>%   
+  lapply(process_geneset_data, celltype_de, logFC_threshold, p_val_adj, p_val_threshold) %>%  
+  bind_rows() 
+
+top_n_target = 250
+ligand_activities_targets_DEgenes = suppressMessages(suppressWarnings(  
+  get_ligand_activities_targets_DEgenes(    receiver_de = celltype_de,   
+                                            receivers_oi = intersect(receivers_oi,
+                                                                     celltype_de$cluster_id 
+                                                                     %>% unique()),    
+                                            ligand_target_matrix = ligand_target_matrix,   
+                                            logFC_threshold = logFC_threshold,  
+                                            p_val_threshold = p_val_threshold,  
+                                            p_val_adj = p_val_adj,   
+                                            top_n_target = top_n_target, 
+                                            verbose = F,   
+                                            n.cores = 2  )))
+
+
+ligand_activity_down = FALSE
+sender_receiver_tbl = sender_receiver_de %>% 
+  distinct(sender, receiver)
+metadata_combined = SummarizedExperiment::colData(sce) %>% tibble::as_tibble()
+
+if(!is.na(batches)){ 
+  grouping_tbl = metadata_combined[,c(group_id, batches)] %>% tibble::as_tibble() %>% dplyr::distinct() 
+  colnames(grouping_tbl) = c("group",batches) 
+  grouping_tbl = grouping_tbl %>% mutate(sample = group) 
+  grouping_tbl = grouping_tbl %>% tibble::as_tibble()}else { 
+    grouping_tbl = metadata_combined[,c(group_id)] %>% tibble::as_tibble() %>% dplyr::distinct() 
+    colnames(grouping_tbl) = c("group") 
+    grouping_tbl = grouping_tbl %>% mutate(sample = group) %>% select(sample, group)  }
+
+prioritization_tables = suppressMessages(multinichenetr::generate_prioritization_tables( 
+  sender_receiver_info = abundance_expression_info$sender_receiver_info, 
+  sender_receiver_de = sender_receiver_de, 
+  ligand_activities_targets_DEgenes = ligand_activities_targets_DEgenes,
+  contrast_tbl = contrast_tbl,  sender_receiver_tbl = sender_receiver_tbl,  
+  grouping_tbl = grouping_tbl,  scenario = "no_frac_LR_expr",
+  fraction_cutoff = fraction_cutoff, 
+  abundance_data_receiver = abundance_expression_info$abundance_data_receiver,
+  abundance_data_sender = abundance_expression_info$abundance_data_sender, 
+  ligand_activity_down = ligand_activity_down))
+
+
+path = "./cell-cell/0716/"
+multinichenet_output = list(  celltype_info = abundance_expression_info$celltype_info, 
+                              celltype_de = celltype_de, 
+                              sender_receiver_info = abundance_expression_info$sender_receiver_info,
+                              sender_receiver_de =  sender_receiver_de, 
+                              ligand_activities_targets_DEgenes = ligand_activities_targets_DEgenes, 
+                              prioritization_tables = prioritization_tables,
+                              grouping_tbl = grouping_tbl, 
+                              lr_target_prior_cor = tibble()) 
+
+group_prioritization_tbl = multinichenet_output$prioritization_tables$group_prioritization_tbl
+
+df = group_prioritization_tbl[group_prioritization_tbl$sender != group_prioritization_tbl$receiver,]
 
 ###CD
 df_CD = df[df$group == "CD",]
